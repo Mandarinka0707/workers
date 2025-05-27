@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   AppBar,
   Box,
@@ -30,12 +30,20 @@ import { useAuth } from '../contexts/AuthContext';
 
 const drawerWidth = 240;
 
-const Layout: React.FC = () => {
+interface LayoutProps {
+  children: React.ReactNode;
+}
+
+const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { logout, user } = useAuth();
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const location = useLocation();
+  const isAuthPage = location.pathname === '/login' || location.pathname === '/register';
+
+  console.log('Current user:', user);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -52,10 +60,12 @@ const Layout: React.FC = () => {
   ];
 
   if (user?.role === 'employer') {
+    console.log('Adding employer menu items');
     menuItems.push(
       { text: 'Отклики на вакансии', icon: <AssignmentIcon />, path: '/employer/dashboard' }
     );
   } else if (user?.role === 'jobseeker') {
+    console.log('Adding jobseeker menu items');
     menuItems.push(
       { text: 'Мои резюме', icon: <DescriptionIcon />, path: '/resumes' },
       { text: 'Мои заявки', icon: <AssignmentIcon />, path: '/applications' }
@@ -97,6 +107,27 @@ const Layout: React.FC = () => {
       </List>
     </Box>
   );
+
+  if (isAuthPage) {
+    return (
+      <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+        <CssBaseline />
+        <Box
+          component="main"
+          sx={{
+            flexGrow: 1,
+            p: 3,
+            width: '100%',
+            minHeight: '100vh',
+            display: 'flex',
+            flexDirection: 'column'
+          }}
+        >
+          {children}
+        </Box>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
@@ -156,22 +187,11 @@ const Layout: React.FC = () => {
       >
         <Toolbar />
         <Box sx={{ flexGrow: 1 }}>
-          <Outlet />
+          {children}
         </Box>
-        <Box
-          component="footer"
-          sx={{
-            py: 3,
-            mt: 'auto',
-            backgroundColor: (theme) =>
-              theme.palette.mode === 'light'
-                ? theme.palette.grey[200]
-                : theme.palette.grey[800],
-          }}
-        >
-          <Container maxWidth="sm">
+        <Box component="footer" sx={{ py: 3, bgcolor: 'background.paper' }}>
+          <Container maxWidth="lg">
             <Typography variant="body2" color="text.secondary" align="center">
-              © {new Date().getFullYear()} JobSearch. Все права защищены.
             </Typography>
           </Container>
         </Box>

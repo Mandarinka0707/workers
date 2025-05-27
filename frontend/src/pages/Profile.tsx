@@ -7,12 +7,16 @@ import {
   TextField,
   Button,
   Divider,
-  Alert
+  Alert,
+  IconButton,
+  InputAdornment
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
+import { auth } from '../services/api';
+import { Edit as EditIcon, Save as SaveIcon, Cancel as CancelIcon } from '@mui/icons-material';
 
 const Profile: React.FC = () => {
-  const { user } = useAuth();
+  const { user, fetchUserProfile } = useAuth();
   const [formData, setFormData] = useState({
     firstName: user?.name.split(' ')[0] || '',
     lastName: user?.name.split(' ').slice(1).join(' ') || '',
@@ -21,6 +25,7 @@ const Profile: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -30,6 +35,20 @@ const Profile: React.FC = () => {
     }));
   };
 
+  const handleEdit = () => {
+    setIsEditing(true);
+  };
+
+  const handleCancel = () => {
+    setFormData({
+      firstName: user?.name.split(' ')[0] || '',
+      lastName: user?.name.split(' ').slice(1).join(' ') || '',
+      email: user?.email || ''
+    });
+    setIsEditing(false);
+    setError(null);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -37,10 +56,17 @@ const Profile: React.FC = () => {
     setLoading(true);
 
     try {
-      // TODO: Implement profile update API call
+      const fullName = `${formData.firstName} ${formData.lastName}`.trim();
+      await auth.updateProfile({ 
+        name: fullName,
+        email: formData.email
+      });
+      await fetchUserProfile();
       setSuccess('Профиль успешно обновлен');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Произошла ошибка при обновлении профиля');
+      setIsEditing(false);
+    } catch (err: any) {
+      console.error('Error updating profile:', err);
+      setError(err.response?.data?.error || 'Произошла ошибка при обновлении профиля');
     } finally {
       setLoading(false);
     }
@@ -54,9 +80,20 @@ const Profile: React.FC = () => {
     <Container maxWidth="md">
       <Box sx={{ mt: 4, mb: 4 }}>
         <Paper elevation={3} sx={{ p: 4 }}>
-          <Typography variant="h4" component="h1" gutterBottom>
-            Профиль
-          </Typography>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h4" component="h1">
+              Профиль
+            </Typography>
+            {!isEditing && (
+              <Button
+                startIcon={<EditIcon />}
+                onClick={handleEdit}
+                variant="outlined"
+              >
+                Редактировать
+              </Button>
+            )}
+          </Box>
           <Divider sx={{ mb: 3 }} />
 
           {error && (
@@ -80,6 +117,8 @@ const Profile: React.FC = () => {
                   name="firstName"
                   value={formData.firstName}
                   onChange={handleChange}
+                  required
+                  disabled={!isEditing}
                 />
               </Box>
               <Box>
@@ -89,6 +128,8 @@ const Profile: React.FC = () => {
                   name="lastName"
                   value={formData.lastName}
                   onChange={handleChange}
+                  required
+                  disabled={!isEditing}
                 />
               </Box>
               <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
@@ -99,7 +140,8 @@ const Profile: React.FC = () => {
                   type="email"
                   value={formData.email}
                   onChange={handleChange}
-                  disabled
+                  required
+                  disabled={!isEditing}
                 />
               </Box>
               <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
@@ -107,16 +149,27 @@ const Profile: React.FC = () => {
                   Роль: {user.role === 'jobseeker' ? 'Соискатель' : 'Работодатель'}
                 </Typography>
               </Box>
-              <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
-                <Button
-                  type="submit"
-                  variant="contained"
-                  color="primary"
-                  disabled={loading}
-                >
-                  {loading ? 'Сохранение...' : 'Сохранить изменения'}
-                </Button>
-              </Box>
+              {isEditing && (
+                <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' }, display: 'flex', gap: 2 }}>
+                  <Button
+                    type="submit"
+                    variant="contained"
+                    color="primary"
+                    disabled={loading}
+                    startIcon={<SaveIcon />}
+                  >
+                    {loading ? 'Сохранение...' : 'Сохранить изменения'}
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    onClick={handleCancel}
+                    disabled={loading}
+                    startIcon={<CancelIcon />}
+                  >
+                    Отмена
+                  </Button>
+                </Box>
+              )}
             </Box>
           </Box>
         </Paper>

@@ -224,3 +224,58 @@ func (r *VacancyRepository) Delete(ctx context.Context, id int64) error {
 	fmt.Printf("Successfully deleted vacancy with ID: %d\n", id)
 	return nil
 }
+
+func (r *VacancyRepository) GetByEmployerID(ctx context.Context, employerID int64) ([]*entity.Vacancy, error) {
+	fmt.Printf("Fetching vacancies for employer ID: %d\n", employerID)
+	query := `
+		SELECT id, employer_id, title, description, requirements, responsibilities,
+			salary, location, employment_type, company, status, skills, education,
+			created_at, updated_at
+		FROM vacancies
+		WHERE employer_id = $1
+		ORDER BY created_at DESC`
+
+	var vacancies []*entity.Vacancy
+	rows, err := r.db.QueryxContext(ctx, query, employerID)
+	if err != nil {
+		fmt.Printf("Error executing query: %v\n", err)
+		return nil, fmt.Errorf("failed to execute query: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var vacancy entity.Vacancy
+		var skills []string
+		err := rows.Scan(
+			&vacancy.ID,
+			&vacancy.EmployerID,
+			&vacancy.Title,
+			&vacancy.Description,
+			&vacancy.Requirements,
+			&vacancy.Responsibilities,
+			&vacancy.Salary,
+			&vacancy.Location,
+			&vacancy.EmploymentType,
+			&vacancy.Company,
+			&vacancy.Status,
+			pq.Array(&skills),
+			&vacancy.Education,
+			&vacancy.CreatedAt,
+			&vacancy.UpdatedAt,
+		)
+		if err != nil {
+			fmt.Printf("Error scanning row: %v\n", err)
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		vacancy.Skills = skills
+		vacancies = append(vacancies, &vacancy)
+	}
+
+	if err = rows.Err(); err != nil {
+		fmt.Printf("Error iterating rows: %v\n", err)
+		return nil, fmt.Errorf("error iterating rows: %w", err)
+	}
+
+	fmt.Printf("Successfully fetched %d vacancies for employer ID: %d\n", len(vacancies), employerID)
+	return vacancies, nil
+}

@@ -101,7 +101,7 @@ func main() {
 	authUsecase := usecase.NewAuthUsecase(userRepo, authConfig, logger)
 	userUsecase := usecase.NewUserUsecase(userRepo, userConfig)
 	vacancyUsecase := usecase.NewVacancyUsecase(vacancyRepo, userRepo)
-	resumeUsecase := usecase.NewResumeUsecase(resumeRepo, userRepo)
+	resumeUsecase := usecase.NewResumeUsecase(resumeRepo, userRepo, applicationRepo)
 	applicationUsecase := usecase.NewApplicationUsecase(applicationRepo, userRepo, vacancyRepo, resumeRepo)
 
 	// Initialize controllers
@@ -116,7 +116,7 @@ func main() {
 
 	// CORS middleware
 	router.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")

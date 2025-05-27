@@ -20,10 +20,11 @@ const CreateResume: React.FC = () => {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    skills: '',
+    skills: [] as string[],
     experience: '',
     education: ''
   });
+  const [newSkill, setNewSkill] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -35,17 +36,31 @@ const CreateResume: React.FC = () => {
     }));
   };
 
+  const handleAddSkill = () => {
+    if (newSkill.trim() && !formData.skills.includes(newSkill.trim())) {
+      setFormData(prev => ({
+        ...prev,
+        skills: [...prev.skills, newSkill.trim()]
+      }));
+      setNewSkill('');
+    }
+  };
+
+  const handleRemoveSkill = (skillToRemove: string) => {
+    setFormData(prev => ({
+      ...prev,
+      skills: prev.skills.filter(skill => skill !== skillToRemove)
+    }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
     try {
-      const skillsArray = formData.skills.split(',').map(skill => skill.trim());
-      
       const response = await api.post('/resumes', {
         ...formData,
-        skills: skillsArray,
         status: 'active'
       });
 
@@ -65,9 +80,9 @@ const CreateResume: React.FC = () => {
 
   return (
     <Container maxWidth="md">
-      <Box sx={{ mt: 4, mb: 4 }}>
+      <Paper elevation={3} sx={{ p: 4, mt: 4 }}>
         <Typography variant="h4" component="h1" gutterBottom>
-          Создать резюме
+          Создание резюме
         </Typography>
 
         {error && (
@@ -76,15 +91,14 @@ const CreateResume: React.FC = () => {
           </Alert>
         )}
 
-        <Paper sx={{ p: 3 }}>
-          <Box component="form" onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             <TextField
               fullWidth
               label="Название резюме"
               name="title"
               value={formData.title}
               onChange={handleChange}
-              margin="normal"
               required
             />
 
@@ -94,22 +108,41 @@ const CreateResume: React.FC = () => {
               name="description"
               value={formData.description}
               onChange={handleChange}
-              margin="normal"
-              required
               multiline
               rows={4}
+              required
             />
 
-            <TextField
-              fullWidth
-              label="Навыки (через запятую)"
-              name="skills"
-              value={formData.skills}
-              onChange={handleChange}
-              margin="normal"
-              required
-              helperText="Введите навыки через запятую"
-            />
+            <Box>
+              <Typography variant="subtitle1" gutterBottom>
+                Навыки
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
+                <TextField
+                  fullWidth
+                  label="Новый навык"
+                  value={newSkill}
+                  onChange={(e) => setNewSkill(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleAddSkill()}
+                />
+                <Button
+                  variant="contained"
+                  onClick={handleAddSkill}
+                  disabled={!newSkill.trim()}
+                >
+                  Добавить
+                </Button>
+              </Box>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                {formData.skills.map((skill, index) => (
+                  <Chip
+                    key={index}
+                    label={skill}
+                    onDelete={() => handleRemoveSkill(skill)}
+                  />
+                ))}
+              </Box>
+            </Box>
 
             <TextField
               fullWidth
@@ -117,10 +150,9 @@ const CreateResume: React.FC = () => {
               name="experience"
               value={formData.experience}
               onChange={handleChange}
-              margin="normal"
-              required
               multiline
               rows={4}
+              required
             />
 
             <TextField
@@ -129,31 +161,29 @@ const CreateResume: React.FC = () => {
               name="education"
               value={formData.education}
               onChange={handleChange}
-              margin="normal"
-              required
               multiline
-              rows={3}
+              rows={4}
+              required
             />
 
-            <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
-              <Button
-                type="submit"
-                variant="contained"
-                color="primary"
-                disabled={loading}
-              >
-                {loading ? 'Создание...' : 'Создать резюме'}
-              </Button>
+            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
               <Button
                 variant="outlined"
                 onClick={() => navigate('/resumes')}
               >
                 Отмена
               </Button>
+              <Button
+                type="submit"
+                variant="contained"
+                disabled={loading}
+              >
+                {loading ? 'Создание...' : 'Создать резюме'}
+              </Button>
             </Box>
           </Box>
-        </Paper>
-      </Box>
+        </form>
+      </Paper>
     </Container>
   );
 };

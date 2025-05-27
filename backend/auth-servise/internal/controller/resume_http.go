@@ -74,6 +74,11 @@ func (c *ResumeController) GetResume(ctx *gin.Context) {
 		return
 	}
 
+	if _, exists := ctx.Get("user_id"); !exists {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
 	fmt.Printf("Fetching resume with ID: %d\n", id)
 	resume, err := c.uc.GetResume(ctx, id)
 	if err != nil {
@@ -114,7 +119,7 @@ func (c *ResumeController) UpdateResume(ctx *gin.Context) {
 		return
 	}
 
-	var req CreateResumeRequest
+	var req UpdateResumeRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -126,6 +131,23 @@ func (c *ResumeController) UpdateResume(ctx *gin.Context) {
 		return
 	}
 
+	// Get existing resume to check ownership
+	existingResume, err := c.uc.GetResume(ctx, id)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to get resume: %v", err)})
+		return
+	}
+	if existingResume == nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "resume not found"})
+		return
+	}
+
+	// Check if the user owns the resume
+	if existingResume.UserID != userID.(int64) {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
+		return
+	}
+
 	resume := &entity.Resume{
 		ID:          id,
 		UserID:      userID.(int64),
@@ -134,7 +156,7 @@ func (c *ResumeController) UpdateResume(ctx *gin.Context) {
 		Skills:      req.Skills,
 		Experience:  req.Experience,
 		Education:   req.Education,
-		Status:      "active",
+		Status:      req.Status,
 	}
 
 	if err := c.uc.UpdateResume(ctx, resume); err != nil {
@@ -152,6 +174,29 @@ func (c *ResumeController) DeleteResume(ctx *gin.Context) {
 		return
 	}
 
+	userID, exists := ctx.Get("user_id")
+	if !exists {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	// Get existing resume to check ownership
+	existingResume, err := c.uc.GetResume(ctx, id)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to get resume: %v", err)})
+		return
+	}
+	if existingResume == nil {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "resume not found"})
+		return
+	}
+
+	// Check if the user owns the resume
+	if existingResume.UserID != userID.(int64) {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
+		return
+	}
+
 	if err := c.uc.DeleteResume(ctx, id); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -161,7 +206,13 @@ func (c *ResumeController) DeleteResume(ctx *gin.Context) {
 }
 
 func (c *ResumeController) GetAllResumes(ctx *gin.Context) {
-	resumes, err := c.uc.GetAllResumes(ctx)
+	userID, exists := ctx.Get("user_id")
+	if !exists {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	resumes, err := c.uc.GetUserResumes(ctx, userID.(int64))
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to get resumes: %v", err)})
 		return

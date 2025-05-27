@@ -17,6 +17,10 @@ import {
   DialogContent,
   DialogActions,
   Divider,
+  Grid,
+  Paper,
+  CircularProgress,
+  Alert
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
 import { vacancies, applications as applicationsApi, resumes } from '../services/api';
@@ -48,35 +52,53 @@ const TabPanel = (props: TabPanelProps) => {
   );
 };
 
-const transformApplicationData = (data: any): Application => {
+const transformResumeData = (data: any): Resume => {
   return {
-    id: data.ID || data.id,
-    vacancyId: data.VacancyID || data.vacancyId || data.vacancy_id,
-    resumeId: data.ResumeID || data.resumeId || data.resume_id,
-    status: (data.Status || data.status || 'pending') as 'pending' | 'accepted' | 'rejected',
-    createdAt: data.CreatedAt || data.createdAt || data.created_at,
-    updatedAt: data.UpdatedAt || data.updatedAt || data.updated_at,
-    applicantName: data.ApplicantName || data.applicantName || data.applicant_name || '',
+    id: Number(data.id || data.ID),
+    userId: String(data.user_id || data.userId || data.UserID),
+    title: data.title || data.Title,
+    description: data.description || data.Description,
+    skills: Array.isArray(data.skills || data.Skills) ? data.skills || data.Skills : [],
+    experience: data.experience || data.Experience,
+    education: data.education || data.Education,
+    status: data.status || data.Status || 'active',
+    createdAt: data.created_at || data.createdAt || data.CreatedAt,
+    updatedAt: data.updated_at || data.updatedAt || data.UpdatedAt
+  };
+};
+
+const transformApplicationData = (data: any): Application & { resume?: Resume } => {
+  return {
+    id: Number(data.id || data.ID),
+    vacancy_id: Number(data.vacancy_id || data.vacancyId || data.VacancyID),
+    resume_id: Number(data.resume_id || data.resumeId || data.ResumeID),
+    user_id: Number(data.user_id || data.userId || data.UserID),
+    status: data.status || data.Status,
+    applicant_name: data.applicant_name || data.applicantName || data.ApplicantName,
+    applicant_email: data.applicant_email || data.applicantEmail || data.ApplicantEmail,
+    created_at: data.created_at || data.createdAt || data.CreatedAt,
+    updated_at: data.updated_at || data.updatedAt || data.UpdatedAt,
+    resume: data.resume ? transformResumeData(data.resume) : undefined
   };
 };
 
 const transformVacancyData = (data: any): Vacancy => {
   return {
     id: data.ID || data.id,
-    employerId: data.EmployerID || data.employerId,
-    title: data.Title || data.title || 'Без названия',
-    description: data.Description || data.description || 'Описание отсутствует',
-    requirements: data.Requirements || data.requirements || '',
-    responsibilities: data.Responsibilities || data.responsibilities || '',
-    salary: Number(data.Salary || data.salary || 0),
-    location: data.Location || data.location || 'Местоположение не указано',
-    employmentType: data.EmploymentType || data.employmentType || '',
-    company: data.Company || data.company || 'Компания не указана',
-    status: data.Status || data.status || 'active',
-    skills: Array.isArray(data.Skills || data.skills) ? (data.Skills || data.skills) : [],
-    education: data.Education || data.education || '',
-    createdAt: data.CreatedAt || data.createdAt || new Date().toISOString(),
-    updatedAt: data.UpdatedAt || data.updatedAt || new Date().toISOString()
+    employerId: data.EmployerID || data.employerId || data.employer_id,
+    title: data.Title || data.title,
+    description: data.Description || data.description,
+    requirements: data.Requirements || data.requirements,
+    responsibilities: data.Responsibilities || data.responsibilities,
+    salary: data.Salary || data.salary,
+    location: data.Location || data.location,
+    employmentType: data.EmploymentType || data.employmentType || data.employment_type,
+    company: data.Company || data.company,
+    status: data.Status || data.status,
+    skills: data.Skills || data.skills || [],
+    education: data.Education || data.education,
+    createdAt: data.CreatedAt || data.createdAt || data.created_at,
+    updatedAt: data.UpdatedAt || data.updatedAt || data.updated_at
   };
 };
 
@@ -89,60 +111,104 @@ const EmployerDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [openDialog, setOpenDialog] = useState(false);
-  const [selectedApplication, setSelectedApplication] = useState<(Application & { resume?: Resume }) | null>(null);
+  const [selectedApplication, setSelectedApplication] = useState<Application & { resume?: Resume } | null>(null);
 
   useEffect(() => {
+    console.log('EmployerDashboard mounted, user:', user);
     if (user?.role === 'employer') {
-      fetchData();
+      console.log('User is employer, fetching applications...');
+      fetchApplications();
+    } else {
+      console.log('User is not employer, skipping applications fetch');
+      setLoading(false);
     }
   }, [user]);
 
-  const fetchData = async () => {
+  const fetchApplications = async () => {
     try {
+      console.log('Starting to fetch applications...');
       setLoading(true);
       setError(null);
-
-      // Получаем вакансии работодателя
+      
+      // Сначала получаем вакансии работодателя
+      console.log('Fetching all vacancies...');
       const vacanciesData = await vacancies.getAll();
-      const employerVacancies = Array.isArray(vacanciesData) 
-        ? vacanciesData.map(transformVacancyData).filter(v => v.employerId === user?.id)
-        : [];
+      console.log('All vacancies response:', vacanciesData);
+      
+      // Проверяем формат данных вакансий
+      if (!Array.isArray(vacanciesData)) {
+        console.error('Invalid vacancies data format:', vacanciesData);
+        setError('Неверный формат данных вакансий');
+        return;
+      }
+      
+      const employerVacancies = vacanciesData
+        .filter(Boolean)
+        .map(transformVacancyData)
+        .filter(v => {
+          console.log('Checking vacancy:', v);
+          console.log('Comparing employerId:', v.employerId, 'with user.id:', user?.id);
+          return v.employerId === user?.id;
+        });
+      
+      console.log('Employer ID:', user?.id);
+      console.log('Employer vacancies after filtering:', employerVacancies);
       setMyVacancies(employerVacancies);
+      
+      if (employerVacancies.length === 0) {
+        console.log('No vacancies found for employer');
+        setApplications([] as (Application & { resume?: Resume })[]);
+        return;
+      }
 
-      // Получаем все отклики
-      const applicationsData = await applicationsApi.getAll();
-      const transformedApplications = Array.isArray(applicationsData)
-        ? applicationsData.map(transformApplicationData)
-        : [transformApplicationData(applicationsData)];
+      // Получаем отклики для каждой вакансии работодателя
+      const vacancyIds = employerVacancies.map(v => v.id);
+      console.log('Fetching applications for vacancy IDs:', vacancyIds);
 
-      // Фильтруем отклики только на вакансии работодателя
-      const employerApplications = transformedApplications.filter(app => 
-        employerVacancies.some(v => v.id === app.vacancyId)
-      );
+      const rawApplications = await applicationsApi.getAll({ 
+        employer_id: user?.id,
+        vacancy_ids: vacancyIds.join(',')
+      });
+      
+      console.log('Raw applications response:', rawApplications);
 
-      // Загружаем данные резюме для каждого отклика
+      // Преобразуем данные откликов
+      const transformedApplications = Array.isArray(rawApplications)
+        ? rawApplications.map(transformApplicationData)
+        : [];
+
+      console.log('Transformed applications:', transformedApplications);
+
+      // Получаем резюме для каждого отклика
       const applicationsWithResumes = await Promise.all(
-        employerApplications.map(async (app) => {
-          if (app.resumeId) {
-            try {
-              const resumeData = await resumes.getById(app.resumeId.toString());
-              return {
-                ...app,
-                resume: resumeData
-              };
-            } catch (err) {
-              console.error('Error fetching resume:', err);
-              return app;
-            }
+        transformedApplications.map(async (app) => {
+          try {
+            const resumeData = await resumes.getById(app.resume_id.toString());
+            const transformedResume: Resume = {
+              id: resumeData.id,
+              userId: resumeData.userId,
+              title: resumeData.title,
+              description: resumeData.description,
+              skills: resumeData.skills,
+              experience: resumeData.experience,
+              education: resumeData.education,
+              status: resumeData.status,
+              createdAt: resumeData.createdAt,
+              updatedAt: resumeData.updatedAt
+            };
+            return { ...app, resume: transformedResume };
+          } catch (error) {
+            console.error('Error fetching resume:', error);
+            return app;
           }
-          return app;
         })
       );
 
-      setApplications(applicationsWithResumes as (Application & { resume?: Resume })[]);
-    } catch (err: any) {
-      console.error('Error fetching data:', err);
-      setError(err.response?.data?.error || 'Failed to load data');
+      console.log('Applications with resumes:', applicationsWithResumes);
+      setApplications(applicationsWithResumes);
+    } catch (error: any) {
+      console.error('Error fetching applications:', error);
+      setError(error.response?.data?.error || 'Не удалось загрузить отклики');
     } finally {
       setLoading(false);
     }
@@ -160,7 +226,7 @@ const EmployerDashboard: React.FC = () => {
   const handleStatusChange = async (applicationId: number, newStatus: 'accepted' | 'rejected') => {
     try {
       await applicationsApi.updateStatus(applicationId, newStatus);
-      await fetchData();
+      await fetchApplications();
     } catch (err: any) {
       console.error('Error updating application status:', err);
       setError(err.response?.data?.error || 'Failed to update application status');
@@ -197,7 +263,7 @@ const EmployerDashboard: React.FC = () => {
     return (
       <Container maxWidth="lg">
         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
-          <Typography>Загрузка...</Typography>
+          <CircularProgress />
         </Box>
       </Container>
     );
@@ -207,7 +273,7 @@ const EmployerDashboard: React.FC = () => {
     return (
       <Container maxWidth="lg">
         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
-          <Typography color="error">{error}</Typography>
+          <Alert severity="error">{error}</Alert>
         </Box>
       </Container>
     );
@@ -217,7 +283,7 @@ const EmployerDashboard: React.FC = () => {
     return (
       <Container maxWidth="lg">
         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
-          <Typography>Доступ запрещен</Typography>
+          <Alert severity="error">Доступ запрещен</Alert>
         </Box>
       </Container>
     );
@@ -241,8 +307,8 @@ const EmployerDashboard: React.FC = () => {
           </Box>
         ) : (
           <Stack spacing={2}>
-            {applications.map((application) => {
-              const vacancy = myVacancies.find(v => v.id === application.vacancyId);
+            {applications.map((application: Application & { resume?: Resume }) => {
+              const vacancy = myVacancies.find(v => Number(v.id) === application.vacancy_id);
               return (
                 <Card key={application.id}>
                   <CardContent>
@@ -250,8 +316,13 @@ const EmployerDashboard: React.FC = () => {
                       {vacancy?.title || 'Вакансия не найдена'}
                     </Typography>
                     <Typography variant="subtitle1" gutterBottom>
-                      Отклик от: {application.applicantName || 'Имя не указано'}
+                      Отклик от: {application.applicant_name || 'Имя не указано'}
                     </Typography>
+                    {application.applicant_email && (
+                      <Typography variant="body2" color="text.secondary" gutterBottom>
+                        Email: {application.applicant_email}
+                      </Typography>
+                    )}
                     {application.resume && (
                       <Typography variant="body2" color="text.secondary" gutterBottom>
                         Резюме: {application.resume.title || 'Без названия'}
@@ -299,54 +370,44 @@ const EmployerDashboard: React.FC = () => {
       </TabPanel>
 
       <TabPanel value={tabValue} index={1}>
-        {myVacancies.length === 0 ? (
-          <Box sx={{ textAlign: 'center', mt: 4 }}>
-            <Typography variant="body1" color="text.secondary" gutterBottom>
-              У вас пока нет созданных вакансий
-            </Typography>
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={() => navigate('/vacancies/create')}
-            >
-              Создать вакансию
-            </Button>
-          </Box>
-        ) : (
-          <Stack spacing={2}>
-            {myVacancies.map((vacancy) => (
-              <Card key={vacancy.id}>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    {vacancy.title}
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary" gutterBottom>
-                    {vacancy.company} • {vacancy.location}
-                  </Typography>
+        <Stack spacing={2}>
+          {myVacancies.map((vacancy) => (
+            <Card key={vacancy.id}>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  {vacancy.title}
+                </Typography>
+                <Typography variant="subtitle1" color="text.secondary" gutterBottom>
+                  {vacancy.company}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  {vacancy.location}
+                </Typography>
+                <Box sx={{ mt: 2 }}>
                   <Chip
-                    label={vacancy.status === 'active' ? 'Активна' : 'Закрыта'}
+                    label={vacancy.status}
                     color={vacancy.status === 'active' ? 'success' : 'default'}
                     size="small"
                   />
-                </CardContent>
-                <CardActions>
-                  <Button
-                    size="small"
-                    onClick={() => navigate(`/vacancies/${vacancy.id}`)}
-                  >
-                    Просмотр
-                  </Button>
-                  <Button
-                    size="small"
-                    onClick={() => navigate(`/vacancies/${vacancy.id}/edit`)}
-                  >
-                    Редактировать
-                  </Button>
-                </CardActions>
-              </Card>
-            ))}
-          </Stack>
-        )}
+                </Box>
+              </CardContent>
+              <CardActions>
+                <Button
+                  size="small"
+                  onClick={() => navigate(`/vacancies/${vacancy.id}`)}
+                >
+                  Просмотреть
+                </Button>
+                <Button
+                  size="small"
+                  onClick={() => navigate(`/vacancies/${vacancy.id}/edit`)}
+                >
+                  Редактировать
+                </Button>
+              </CardActions>
+            </Card>
+          ))}
+        </Stack>
       </TabPanel>
 
       <Dialog
@@ -361,43 +422,56 @@ const EmployerDashboard: React.FC = () => {
               Детали отклика
             </DialogTitle>
             <DialogContent>
-              <Box sx={{ mt: 2 }}>
-                <Typography variant="h6" gutterBottom>
-                  Информация о соискателе
-                </Typography>
-                <Typography variant="body1" gutterBottom>
-                  Имя: {selectedApplication.applicantName || 'Не указано'}
-                </Typography>
-
-                {selectedApplication.resume && (
-                  <>
-                    <Divider sx={{ my: 2 }} />
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <Box>
+                  <Paper sx={{ p: 2 }}>
                     <Typography variant="h6" gutterBottom>
-                      Резюме
+                      Информация о соискателе
                     </Typography>
                     <Typography variant="body1" gutterBottom>
-                      Название: {selectedApplication.resume.title}
+                      Имя: {(selectedApplication as any).applicant_name || 'Не указано'}
                     </Typography>
-                    <Typography variant="body1" gutterBottom>
-                      Опыт работы: {selectedApplication.resume.experience}
-                    </Typography>
-                    <Typography variant="body1" gutterBottom>
-                      Образование: {selectedApplication.resume.education}
-                    </Typography>
-                    <Typography variant="body1" gutterBottom>
-                      Навыки: {selectedApplication.resume.skills?.join(', ')}
-                    </Typography>
-                  </>
+                    {(selectedApplication as any).applicant_email && (
+                      <Typography variant="body1" gutterBottom>
+                        Email: {(selectedApplication as any).applicant_email}
+                      </Typography>
+                    )}
+                  </Paper>
+                </Box>
+
+                {(selectedApplication as any).resume && (
+                  <Box>
+                    <Paper sx={{ p: 2 }}>
+                      <Typography variant="h6" gutterBottom>
+                        Резюме
+                      </Typography>
+                      <Typography variant="body1" gutterBottom>
+                        Название: {(selectedApplication as any).resume.title}
+                      </Typography>
+                      <Typography variant="body1" gutterBottom>
+                        Опыт работы: {(selectedApplication as any).resume.experience}
+                      </Typography>
+                      <Typography variant="body1" gutterBottom>
+                        Образование: {(selectedApplication as any).resume.education}
+                      </Typography>
+                      <Typography variant="body1" gutterBottom>
+                        Навыки: {(selectedApplication as any).resume.skills?.join(', ')}
+                      </Typography>
+                    </Paper>
+                  </Box>
                 )}
 
-                <Divider sx={{ my: 2 }} />
-                <Typography variant="h6" gutterBottom>
-                  Статус отклика
-                </Typography>
-                <Chip
-                  label={getStatusLabel(selectedApplication.status)}
-                  color={getStatusColor(selectedApplication.status)}
-                />
+                <Box>
+                  <Paper sx={{ p: 2 }}>
+                    <Typography variant="h6" gutterBottom>
+                      Статус отклика
+                    </Typography>
+                    <Chip
+                      label={getStatusLabel(selectedApplication.status)}
+                      color={getStatusColor(selectedApplication.status)}
+                    />
+                  </Paper>
+                </Box>
               </Box>
             </DialogContent>
             <DialogActions>

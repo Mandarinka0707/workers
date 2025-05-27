@@ -1,239 +1,301 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { resumes } from '../api';
+import { Resume } from '../types';
 import {
   Container,
   Paper,
   Typography,
-  Box,
   TextField,
   Button,
-  Chip,
+  Box,
   CircularProgress,
   Alert,
-  Autocomplete
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  IconButton,
+  InputAdornment,
+  Autocomplete,
+  Chip,
 } from '@mui/material';
-import { useAuth } from '../contexts/AuthContext';
-import { resumes } from '../services/api';
-import { Resume } from '../types';
-
-const transformResumeData = (data: any): Resume => {
-  return {
-    id: data.id,
-    userId: data.user_id,
-    title: data.title,
-    description: data.description,
-    experience: data.experience,
-    education: data.education,
-    skills: data.skills || [],
-    status: data.status || 'active',
-    createdAt: data.created_at,
-    updatedAt: data.updated_at
-  };
-};
+import {
+  Description as DescriptionIcon,
+  Work as WorkIcon,
+  School as SchoolIcon,
+  CheckCircle as CheckCircleIcon,
+  Cancel as CancelIcon,
+  Save as SaveIcon,
+  Lightbulb as LightbulbIcon,
+  ArrowBack as ArrowBackIcon,
+  Close as CloseIcon,
+  TextFields as TextFieldsIcon,
+} from '@mui/icons-material';
 
 const ResumeEdit: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [resume, setResume] = useState<Resume | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [skills, setSkills] = useState<string[]>([]);
-  const [experience, setExperience] = useState('');
-  const [education, setEducation] = useState('');
-  const [status, setStatus] = useState<'active' | 'archived'>('active');
-  const [newSkill, setNewSkill] = useState('');
+  const [resume, setResume] = useState<Partial<Resume>>({
+    title: '',
+    description: '',
+    skills: [],
+    experience: '',
+    education: '',
+    status: 'active'
+  });
 
   useEffect(() => {
     const fetchResume = async () => {
-      if (!id) {
-        setError('Resume ID is required');
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const data = await resumes.getById(id);
-        const transformedData = transformResumeData(data);
-        setResume(transformedData);
-        setTitle(transformedData.title);
-        setDescription(transformedData.description);
-        setSkills(transformedData.skills || []);
-        setExperience(transformedData.experience);
-        setEducation(transformedData.education);
-        setStatus(transformedData.status);
-      } catch (err: any) {
-        console.error('Error fetching resume:', err);
-        setError(err.response?.data?.error || 'Failed to load resume');
-      } finally {
-        setLoading(false);
+      if (id) {
+        try {
+          setLoading(true);
+          const data = await resumes.get(parseInt(id));
+          setResume(data);
+        } catch (err) {
+          setError('Failed to load resume');
+          console.error('Error loading resume:', err);
+        } finally {
+          setLoading(false);
+        }
       }
     };
 
     fetchResume();
   }, [id]);
 
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | { target: { name?: string; value: unknown } }
+  ) => {
+    const { name, value } = e.target;
+    setResume(prev => ({ ...prev, [name as string]: value }));
+  };
+
+  const handleSkillsChange = (_: any, newValue: string[]) => {
+    setResume(prev => ({ ...prev, skills: newValue }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!id) {
-      setError('Resume ID is required');
-      return;
-    }
-
     try {
-      const updatedResume = {
-        ...resume,
-        title,
-        description,
-        skills,
-        experience,
-        education,
-        status
-      };
+      setLoading(true);
+      setError(null);
 
-      console.log('Sending update request with data:', updatedResume);
-      console.log('Resume ID:', id);
-      
-      const response = await resumes.update(id, updatedResume);
-      console.log('Update response:', response);
-      
-      navigate(`/resumes/${id}`);
-    } catch (err: any) {
-      console.error('Error updating resume:', err);
-      console.error('Error details:', {
-        message: err.message,
-        response: err.response,
-        request: err.request
-      });
-      setError(err.response?.data?.error || 'Failed to update resume');
+      if (id) {
+        await resumes.update(parseInt(id), resume);
+      } else {
+        await resumes.create(resume as Omit<Resume, 'id' | 'user_id' | 'created_at' | 'updated_at'>);
+      }
+
+      navigate('/resumes');
+    } catch (err) {
+      setError('Failed to save resume');
+      console.error('Error saving resume:', err);
+    } finally {
+      setLoading(false);
     }
-  };
-
-  const handleAddSkill = () => {
-    if (newSkill && !skills.includes(newSkill)) {
-      setSkills([...skills, newSkill]);
-      setNewSkill('');
-    }
-  };
-
-  const handleDeleteSkill = (skillToDelete: string) => {
-    setSkills(skills.filter(skill => skill !== skillToDelete));
   };
 
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
         <CircularProgress />
       </Box>
     );
   }
 
-  if (error || !resume) {
-    return (
-      <Container maxWidth="md">
-        <Alert severity="error" sx={{ mt: 4 }}>
-          {error || 'Resume not found'}
-        </Alert>
-      </Container>
-    );
-  }
-
   return (
-    <Container maxWidth="md">
-      <Box sx={{ mt: 4, mb: 4 }}>
-        <Paper elevation={3} sx={{ p: 4 }}>
-          <Typography variant="h4" component="h1" gutterBottom>
-            Edit Resume
-          </Typography>
+    <Container maxWidth="md" sx={{ py: 4 }}>
+      <Paper elevation={3}>
+        <Box sx={{ bgcolor: 'primary.main', color: 'white', p: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="h4" component="h1" sx={{ display: 'flex', alignItems: 'center' }}>
+              <DescriptionIcon sx={{ mr: 1, fontSize: 32 }} />
+              {id ? 'Редактирование резюме' : 'Создание резюме'}
+            </Typography>
+            {!id && (
+              <Button
+                variant="outlined"
+                startIcon={<ArrowBackIcon />}
+                onClick={() => navigate('/resumes')}
+                sx={{
+                  borderColor: 'white',
+                  color: 'white',
+                  '&:hover': {
+                    borderColor: 'white',
+                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  },
+                }}
+              >
+                Вернуться к списку
+              </Button>
+            )}
+          </Box>
+        </Box>
 
-          <form onSubmit={handleSubmit}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-              <TextField
-                label="Title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                required
-                fullWidth
-              />
+        <Box sx={{ p: 3 }}>
+          {error && (
+            <Alert severity="error" sx={{ mb: 3 }}>
+              {error}
+            </Alert>
+          )}
 
-              <TextField
-                label="Description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                multiline
-                rows={4}
-                fullWidth
-              />
+          <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <TextField
+              fullWidth
+              label="Название резюме"
+              name="title"
+              value={resume.title}
+              onChange={handleChange}
+              required
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <DescriptionIcon color="action" />
+                  </InputAdornment>
+                ),
+              }}
+            />
 
-              <Box>
-                <Typography variant="subtitle1" gutterBottom>
-                  Skills
-                </Typography>
-                <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-                  <TextField
-                    label="New skill"
-                    value={newSkill}
-                    onChange={(e) => setNewSkill(e.target.value)}
-                    size="small"
-                  />
-                  <Button
-                    variant="outlined"
-                    onClick={handleAddSkill}
-                    disabled={!newSkill}
-                  >
-                    Add
-                  </Button>
-                </Box>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                  {skills.map((skill, index) => (
+            <TextField
+              fullWidth
+              label="Описание"
+              name="description"
+              value={resume.description}
+              onChange={handleChange}
+              required
+              multiline
+              rows={4}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <TextFieldsIcon color="action" />
+                  </InputAdornment>
+                ),
+              }}
+            />
+
+            <Autocomplete
+              multiple
+              freeSolo
+              options={[]}
+              value={resume.skills || []}
+              onChange={handleSkillsChange}
+              renderTags={(value, getTagProps) =>
+                value.map((option, index) => {
+                  const { key, ...chipProps } = getTagProps({ index });
+                  return (
                     <Chip
-                      key={index}
-                      label={skill}
-                      onDelete={() => handleDeleteSkill(skill)}
+                      key={key}
+                      label={option}
+                      {...chipProps}
+                      color="primary"
+                      variant="outlined"
                     />
-                  ))}
-                </Box>
-              </Box>
+                  );
+                })
+              }
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  fullWidth
+                  label="Навыки"
+                  required={!resume.skills?.length}
+                  error={!resume.skills?.length}
+                  helperText={!resume.skills?.length ? "Это поле обязательно для заполнения" : "Введите навык и нажмите Enter для добавления"}
+                  InputProps={{
+                    ...params.InputProps,
+                    startAdornment: (
+                      <>
+                        <InputAdornment position="start">
+                          <LightbulbIcon color="action" />
+                        </InputAdornment>
+                        {params.InputProps.startAdornment}
+                      </>
+                    ),
+                  }}
+                />
+              )}
+            />
 
-              <TextField
-                label="Experience"
-                value={experience}
-                onChange={(e) => setExperience(e.target.value)}
-                multiline
-                rows={4}
-                fullWidth
-              />
+            <TextField
+              fullWidth
+              label="Опыт работы"
+              name="experience"
+              value={resume.experience}
+              onChange={handleChange}
+              required
+              multiline
+              rows={4}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <WorkIcon color="action" />
+                  </InputAdornment>
+                ),
+              }}
+            />
 
-              <TextField
-                label="Education"
-                value={education}
-                onChange={(e) => setEducation(e.target.value)}
-                multiline
-                rows={4}
-                fullWidth
-              />
+            <TextField
+              fullWidth
+              label="Образование"
+              name="education"
+              value={resume.education}
+              onChange={handleChange}
+              required
+              multiline
+              rows={4}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SchoolIcon color="action" />
+                  </InputAdornment>
+                ),
+              }}
+            />
 
-              <Box sx={{ display: 'flex', gap: 2 }}>
-                <Button
-                  type="submit"
-                  variant="contained"
-                  color="primary"
-                >
-                  Save
-                </Button>
-                <Button
-                  variant="outlined"
-                  onClick={() => navigate(`/resumes/${id}`)}
-                >
-                  Cancel
-                </Button>
-              </Box>
+            <FormControl fullWidth required>
+              <InputLabel>Статус</InputLabel>
+              <Select
+                name="status"
+                value={resume.status}
+                onChange={handleChange}
+                label="Статус"
+                startAdornment={
+                  <InputAdornment position="start">
+                    <CheckCircleIcon color="action" />
+                  </InputAdornment>
+                }
+              >
+                <MenuItem value="active">Активно</MenuItem>
+                <MenuItem value="archived">В архиве</MenuItem>
+              </Select>
+            </FormControl>
+
+            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', mt: 2 }}>
+              <Button
+                variant="outlined"
+                onClick={() => navigate('/resumes')}
+                startIcon={<CloseIcon />}
+              >
+                Отмена
+              </Button>
+              <Button
+                type="submit"
+                variant="contained"
+                disabled={loading}
+                startIcon={loading ? <CircularProgress size={20} /> : <SaveIcon />}
+              >
+                {loading ? 'Сохранение...' : 'Сохранить резюме'}
+              </Button>
             </Box>
-          </form>
-        </Paper>
-      </Box>
+          </Box>
+        </Box>
+      </Paper>
     </Container>
   );
 };

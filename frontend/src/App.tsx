@@ -14,10 +14,11 @@ import VacancyEdit from './pages/VacancyEdit';
 import CreateVacancy from './pages/CreateVacancy';
 import ResumeList from './pages/ResumeList';
 import CreateResume from './pages/CreateResume';
-import ResumeView from './pages/ResumeView';
+import ResumeDetails from './pages/ResumeDetails';
 import ResumeEdit from './pages/ResumeEdit';
 import EmployerDashboard from './pages/EmployerDashboard';
 import Applications from './pages/Applications';
+import VacancyResponses from './pages/VacancyResponses';
 
 const theme = createTheme({
   palette: {
@@ -47,31 +48,26 @@ const App: React.FC = () => {
       <CssBaseline />
       <AuthProvider>
         <Router>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route
-              path="/"
-              element={
-                <PrivateRoute>
-                  <Layout />
-                </PrivateRoute>
-              }
-            >
-              <Route index element={<Home />} />
-              <Route path="profile" element={<Profile />} />
-              <Route path="vacancies" element={<VacancyList />} />
-              <Route path="vacancies/create" element={<CreateVacancy />} />
-              <Route path="vacancies/:id" element={<VacancyView />} />
-              <Route path="vacancies/:id/edit" element={<VacancyEdit />} />
-              <Route path="resumes" element={<ResumeList />} />
-              <Route path="resumes/create" element={<CreateResume />} />
-              <Route path="resumes/:id" element={<ResumeView />} />
-              <Route path="resumes/:id/edit" element={<ResumeEdit />} />
-              <Route path="applications" element={<Applications />} />
+          <Layout>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/" element={<PrivateRoute><Home /></PrivateRoute>} />
+              <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
+              <Route path="/vacancies" element={<PrivateRoute><VacancyList /></PrivateRoute>} />
+              <Route path="/vacancies/create" element={<PrivateRoute><CreateVacancy /></PrivateRoute>} />
+              <Route path="/vacancies/:id" element={<PrivateRoute><VacancyView /></PrivateRoute>} />
+              <Route path="/vacancies/:id/edit" element={<PrivateRoute><VacancyEdit /></PrivateRoute>} />
+              <Route path="/vacancies/:id/responses" element={<PrivateRoute><VacancyResponses /></PrivateRoute>} />
+              <Route path="/resumes" element={<PrivateRoute><ResumeList /></PrivateRoute>} />
+              <Route path="/resumes/create" element={<PrivateRoute><CreateResume /></PrivateRoute>} />
+              <Route path="/resumes/:id" element={<PrivateRoute><ResumeDetails /></PrivateRoute>} />
+              <Route path="/resumes/:id/edit" element={<PrivateRoute><ResumeEdit /></PrivateRoute>} />
+              <Route path="/employer/dashboard" element={<PrivateRoute><EmployerDashboard /></PrivateRoute>} />
+              <Route path="/applications" element={<PrivateRoute><Applications /></PrivateRoute>} />
               <Route path="*" element={<Navigate to="/" replace />} />
-            </Route>
-          </Routes>
+            </Routes>
+          </Layout>
         </Router>
       </AuthProvider>
     </ThemeProvider>

@@ -11,7 +11,16 @@ import {
   Chip,
   Stack,
   Alert,
-  CircularProgress
+  CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  MenuItem,
+  Select,
+  FormControl,
+  InputLabel,
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
 import { applications, vacancies } from '../services/api';
@@ -19,13 +28,15 @@ import { Application, Vacancy } from '../types';
 
 const transformApplicationData = (data: any): Application => {
   return {
-    id: data.id || data.ID,
-    vacancyId: data.vacancyId || data.vacancy_id || data.VacancyID,
-    resumeId: data.resumeId || data.resume_id || data.ResumeID,
+    id: Number(data.id || data.ID),
+    vacancy_id: Number(data.vacancy_id || data.vacancyId || data.VacancyID),
+    resume_id: Number(data.resume_id || data.resumeId || data.ResumeID),
+    user_id: Number(data.user_id || data.userId || data.UserID),
     status: data.status || data.Status,
-    applicantName: data.applicantName || data.applicant_name || data.ApplicantName,
-    createdAt: data.createdAt || data.created_at || data.CreatedAt,
-    updatedAt: data.updatedAt || data.updated_at || data.UpdatedAt
+    applicant_name: data.applicant_name || data.applicantName || data.ApplicantName,
+    applicant_email: data.applicant_email || data.applicantEmail || data.ApplicantEmail,
+    created_at: data.created_at || data.createdAt || data.CreatedAt,
+    updated_at: data.updated_at || data.updatedAt || data.UpdatedAt
   };
 };
 
@@ -56,6 +67,10 @@ const Applications: React.FC = () => {
   const [vacanciesMap, setVacanciesMap] = useState<Record<number, Vacancy>>({});
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+  const [newStatus, setNewStatus] = useState<'pending' | 'accepted' | 'rejected'>('pending');
+  const [updateLoading, setUpdateLoading] = useState(false);
 
   useEffect(() => {
     if (user?.role !== 'jobseeker') {
@@ -81,10 +96,10 @@ const Applications: React.FC = () => {
         .map((app: Application) => {
           console.log('Processing application:', {
             id: app.id,
-            vacancyId: app.vacancyId,
+            vacancyId: app.vacancy_id,
             allFields: app
           });
-          return app.vacancyId;
+          return app.vacancy_id;
         })
         .filter((id: number | undefined | null): id is number => id !== undefined && id !== null);
       
@@ -109,7 +124,7 @@ const Applications: React.FC = () => {
       ).then(vacancies => {
         const map = vacancies.reduce((acc: Record<number, Vacancy>, vacancy: Vacancy | null) => {
           if (vacancy) {
-            acc[vacancy.id] = vacancy;
+            acc[Number(vacancy.id)] = vacancy;
           }
           return acc;
         }, {} as Record<number, Vacancy>);
@@ -127,16 +142,40 @@ const Applications: React.FC = () => {
     }
   };
 
+  const handleStatusChange = (application: Application) => {
+    setSelectedApplication(application);
+    setNewStatus(application.status);
+    setStatusDialogOpen(true);
+  };
+
+  const handleStatusUpdate = async () => {
+    if (!selectedApplication) return;
+
+    try {
+      setUpdateLoading(true);
+      await applications.updateStatus(selectedApplication.id, newStatus);
+      setApplicationsList(applicationsList.map(app => 
+        app.id === selectedApplication.id 
+          ? { ...app, status: newStatus }
+          : app
+      ));
+      setStatusDialogOpen(false);
+    } catch (err) {
+      console.error('Error updating status:', err);
+      setError('Failed to update status');
+    } finally {
+      setUpdateLoading(false);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'pending':
-        return 'warning';
       case 'accepted':
         return 'success';
       case 'rejected':
         return 'error';
       default:
-        return 'default';
+        return 'warning';
     }
   };
 
@@ -191,9 +230,9 @@ const Applications: React.FC = () => {
           <Stack spacing={2}>
             {applicationsList.map((application) => {
               console.log('Rendering application:', application);
-              console.log('Looking for vacancy with ID:', application.vacancyId);
+              console.log('Looking for vacancy with ID:', application.vacancy_id);
               console.log('Available vacancies:', vacanciesMap);
-              const vacancy = vacanciesMap[application.vacancyId];
+              const vacancy = vacanciesMap[application.vacancy_id];
               console.log('Found vacancy:', vacancy);
               
               return (
@@ -211,7 +250,7 @@ const Applications: React.FC = () => {
                     <Box sx={{ mt: 2 }}>
                       <Chip
                         label={getStatusLabel(application.status)}
-                        color={getStatusColor(application.status)}
+                        color={getStatusColor(application.status) as any}
                         size="small"
                       />
                     </Box>
@@ -219,16 +258,24 @@ const Applications: React.FC = () => {
                   <CardActions>
                     <Button
                       size="small"
-                      onClick={() => navigate(`/vacancies/${application.vacancyId}`)}
+                      onClick={() => navigate(`/vacancies/${application.vacancy_id}`)}
                     >
                       Просмотреть вакансию
                     </Button>
                     <Button
                       size="small"
-                      onClick={() => navigate(`/resumes/${application.resumeId}`)}
+                      onClick={() => navigate(`/resumes/${application.resume_id}`)}
                     >
                       Просмотреть резюме
                     </Button>
+                    {user?.role === 'employer' && (
+                      <Button
+                        size="small"
+                        onClick={() => handleStatusChange(application)}
+                      >
+                        Обновить статус
+                      </Button>
+                    )}
                   </CardActions>
                 </Card>
               );
@@ -236,6 +283,34 @@ const Applications: React.FC = () => {
           </Stack>
         )}
       </Box>
+
+      <Dialog open={statusDialogOpen} onClose={() => setStatusDialogOpen(false)}>
+        <DialogTitle>Обновить статус заявки</DialogTitle>
+        <DialogContent>
+          <FormControl fullWidth sx={{ mt: 2 }}>
+            <InputLabel>Статус</InputLabel>
+            <Select
+              value={newStatus}
+              label="Статус"
+              onChange={(e) => setNewStatus(e.target.value as 'pending' | 'accepted' | 'rejected')}
+            >
+              <MenuItem value="pending">На рассмотрении</MenuItem>
+              <MenuItem value="accepted">Принято</MenuItem>
+              <MenuItem value="rejected">Отклонено</MenuItem>
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setStatusDialogOpen(false)}>Отмена</Button>
+          <Button 
+            onClick={handleStatusUpdate} 
+            disabled={updateLoading}
+            variant="contained"
+          >
+            {updateLoading ? <CircularProgress size={24} /> : 'Обновить'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };

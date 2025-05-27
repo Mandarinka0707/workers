@@ -37,7 +37,7 @@ const transformVacancyData = (data: any): Vacancy => {
     description: data.Description || data.description || 'Описание отсутствует',
     requirements: data.Requirements || data.requirements || '',
     responsibilities: data.Responsibilities || data.responsibilities || '',
-    salary: Number(data.Salary || data.salary || 0),
+    salary: String(data.Salary || data.salary || 0),
     location: data.Location || data.location || 'Местоположение не указано',
     employmentType: data.EmploymentType || data.employmentType || '',
     company: data.Company || data.company || 'Компания не указана',
@@ -138,16 +138,13 @@ const VacancyView: React.FC = () => {
       const rawData = await vacancies.getById(id);
       console.log('Raw vacancy data:', rawData);
       
-      // Проверяем структуру данных
       if (!rawData) {
         throw new Error('No vacancy data received');
       }
 
-      // Преобразуем данные
       const transformedData = transformVacancyData(rawData);
       console.log('Transformed vacancy data:', transformedData);
 
-      // Проверяем обязательные поля
       if (!transformedData.title || !transformedData.company || !transformedData.salary) {
         console.warn('Missing required fields:', {
           title: transformedData.title,
@@ -187,21 +184,22 @@ const VacancyView: React.FC = () => {
   };
 
   const handleApply = async () => {
-    if (!id || !selectedResumeId) return;
+    if (!id || !selectedResumeId) {
+      console.log('Missing required data:', { id, selectedResumeId });
+      return;
+    }
     setApplyLoading(true);
 
     try {
-      console.log('Sending application with data:', {
-        vacancyId: parseInt(id),
-        resumeId: parseInt(selectedResumeId),
+      const applicationData = {
+        vacancy_id: parseInt(id),
+        resume_id: parseInt(selectedResumeId),
         status: 'pending'
-      });
+      };
+      console.log('Sending application with data:', applicationData);
 
-      await applications.create({
-        vacancyId: parseInt(id),
-        resumeId: parseInt(selectedResumeId),
-        status: 'pending'
-      });
+      const response = await applications.create(applicationData);
+      console.log('Application created successfully:', response);
 
       setOpenDialog(false);
       navigate('/applications');
@@ -210,7 +208,8 @@ const VacancyView: React.FC = () => {
       console.error('Error details:', {
         message: err.message,
         response: err.response?.data,
-        status: err.response?.status
+        status: err.response?.status,
+        headers: err.response?.headers
       });
       setError(err.response?.data?.error || 'Не удалось отправить отклик');
     } finally {
@@ -294,7 +293,7 @@ const VacancyView: React.FC = () => {
               {vacancy.location} • {vacancy.employmentType}
             </Typography>
             <Typography variant="h6" color="primary" gutterBottom>
-              {vacancy.salary.toLocaleString()} ₽
+              {Number(vacancy.salary).toLocaleString()} ₽
             </Typography>
           </Box>
 

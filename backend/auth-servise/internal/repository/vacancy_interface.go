@@ -10,6 +10,7 @@ type VacancyRepositoryInterface interface {
 	Create(ctx context.Context, vacancy *entity.Vacancy) error
 	GetByID(ctx context.Context, id int64) (*entity.Vacancy, error)
 	GetAll(ctx context.Context) ([]*entity.Vacancy, error)
+	GetByEmployerID(ctx context.Context, employerID int64) ([]*entity.Vacancy, error)
 	Update(ctx context.Context, vacancy *entity.Vacancy) error
 	Delete(ctx context.Context, id int64) error
 }

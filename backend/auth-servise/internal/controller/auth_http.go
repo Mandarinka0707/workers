@@ -220,7 +220,8 @@ func (c *HTTPAuthController) UpdateProfile(ctx *gin.Context) {
 	}
 
 	var req struct {
-		Name string `json:"name"`
+		Name  string `json:"name"`
+		Email string `json:"email"`
 	}
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -239,8 +240,22 @@ func (c *HTTPAuthController) UpdateProfile(ctx *gin.Context) {
 		return
 	}
 
+	// Сохраняем текущие значения
+	currentRole := user.Role
+	currentPassword := user.Password
+
+	// Обновляем только разрешенные поля
 	user.Name = req.Name
-	// TODO: Add update method to usecase and repository
+	user.Email = req.Email
+	// Восстанавливаем роль и пароль
+	user.Role = currentRole
+	user.Password = currentPassword
+
+	// Обновляем пользователя в базе данных
+	if err := c.uc.Update(ctx.Request.Context(), user); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update user"})
+		return
+	}
 
 	ctx.JSON(http.StatusOK, gin.H{
 		"id":        user.ID,

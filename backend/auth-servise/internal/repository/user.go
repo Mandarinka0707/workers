@@ -88,17 +88,15 @@ func (r *userRepository) GetByEmail(ctx context.Context, email string) (*entity.
 func (r *userRepository) Update(ctx context.Context, user *entity.User) error {
 	query := `
 		UPDATE users
-		SET email = $1, password = $2, name = $3, role = $4, updated_at = $5
-		WHERE id = $6`
+		SET name = $1, email = $2, updated_at = $3
+		WHERE id = $4`
 
 	user.UpdatedAt = time.Now()
 	_, err := r.db.ExecContext(
 		ctx,
 		query,
-		user.Email,
-		user.Password,
 		user.Name,
-		user.Role,
+		user.Email,
 		user.UpdatedAt,
 		user.ID,
 	)

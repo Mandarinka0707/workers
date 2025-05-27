@@ -13,8 +13,10 @@ type ApplicationRepositoryInterface interface {
 	Create(ctx context.Context, application *entity.Application) error
 	GetByID(ctx context.Context, id int64) (*entity.Application, error)
 	GetAll(ctx context.Context, userID int64) ([]*entity.Application, error)
+	GetByVacancyID(ctx context.Context, vacancyID int64) ([]*entity.Application, error)
 	Update(ctx context.Context, application *entity.Application) error
 	Delete(ctx context.Context, id int64) error
+	DeleteByResumeID(ctx context.Context, resumeID int64) error
 }
 
 type ApplicationRepository struct {
@@ -26,6 +28,8 @@ func NewApplicationRepository(db *sqlx.DB) *ApplicationRepository {
 }
 
 func (r *ApplicationRepository) Create(ctx context.Context, application *entity.Application) error {
+	fmt.Printf("ApplicationRepository.Create called with application: %+v\n", application)
+
 	query := `
 		INSERT INTO applications (user_id, vacancy_id, resume_id, status, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6)
@@ -34,6 +38,15 @@ func (r *ApplicationRepository) Create(ctx context.Context, application *entity.
 	now := time.Now()
 	application.CreatedAt = now
 	application.UpdatedAt = now
+
+	fmt.Printf("Executing query with values: %+v\n", map[string]interface{}{
+		"user_id":    application.UserID,
+		"vacancy_id": application.VacancyID,
+		"resume_id":  application.ResumeID,
+		"status":     application.Status,
+		"created_at": application.CreatedAt,
+		"updated_at": application.UpdatedAt,
+	})
 
 	err := r.db.QueryRowContext(
 		ctx,
@@ -47,9 +60,11 @@ func (r *ApplicationRepository) Create(ctx context.Context, application *entity.
 	).Scan(&application.ID)
 
 	if err != nil {
+		fmt.Printf("Error creating application in database: %v\n", err)
 		return fmt.Errorf("failed to create application: %w", err)
 	}
 
+	fmt.Printf("Application created successfully with ID: %d\n", application.ID)
 	return nil
 }
 
@@ -81,6 +96,25 @@ func (r *ApplicationRepository) GetAll(ctx context.Context, userID int64) ([]*en
 		return nil, fmt.Errorf("failed to get applications: %w", err)
 	}
 
+	return applications, nil
+}
+
+func (r *ApplicationRepository) GetByVacancyID(ctx context.Context, vacancyID int64) ([]*entity.Application, error) {
+	fmt.Printf("GetByVacancyID: Starting query for vacancy ID=%d\n", vacancyID)
+	query := `
+		SELECT id, user_id, vacancy_id, resume_id, status, created_at, updated_at
+		FROM applications
+		WHERE vacancy_id = $1
+		ORDER BY created_at DESC`
+
+	var applications []*entity.Application
+	err := r.db.SelectContext(ctx, &applications, query, vacancyID)
+	if err != nil {
+		fmt.Printf("GetByVacancyID: Error executing query: %v\n", err)
+		return nil, fmt.Errorf("failed to get applications by vacancy ID: %w", err)
+	}
+
+	fmt.Printf("GetByVacancyID: Found %d applications for vacancy ID=%d\n", len(applications), vacancyID)
 	return applications, nil
 }
 
@@ -128,6 +162,22 @@ func (r *ApplicationRepository) Delete(ctx context.Context, id int64) error {
 	}
 	if rowsAffected == 0 {
 		return fmt.Errorf("application not found")
+	}
+
+	return nil
+}
+
+func (r *ApplicationRepository) DeleteByResumeID(ctx context.Context, resumeID int64) error {
+	query := `DELETE FROM applications WHERE resume_id = $1`
+
+	result, err := r.db.ExecContext(ctx, query, resumeID)
+	if err != nil {
+		return fmt.Errorf("failed to delete applications by resume ID: %w", err)
+	}
+
+	_, err = result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
 	return nil

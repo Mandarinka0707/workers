@@ -16,20 +16,18 @@ import { useAuth } from '../contexts/AuthContext';
 import { resumes } from '../services/api';
 import { Resume } from '../types';
 
-const transformResumeData = (data: any): Resume => {
-  return {
-    id: data.id,
-    userId: data.user_id,
-    title: data.title,
-    description: data.description,
-    experience: data.experience,
-    education: data.education,
-    skills: data.skills || [],
-    status: data.status || 'active',
-    createdAt: data.created_at,
-    updatedAt: data.updated_at
-  };
-};
+const transformResumeData = (data: any): Resume => ({
+  id: data.id,
+  userId: data.user_id,
+  title: data.title,
+  description: data.description,
+  experience: data.experience,
+  education: data.education,
+  skills: data.skills,
+  status: data.status,
+  createdAt: data.created_at,
+  updatedAt: data.updated_at
+});
 
 const ResumeView: React.FC = () => {
   const { id } = useParams<{ id: string }>();

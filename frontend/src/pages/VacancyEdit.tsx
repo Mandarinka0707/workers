@@ -39,16 +39,21 @@ const VacancyEdit: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [newSkill, setNewSkill] = useState('');
   const [formData, setFormData] = useState<Partial<Vacancy>>({
+    id: undefined,
+    employerId: user?.id,
     title: '',
     description: '',
-    requirements: '',
+    requirements: [],
     responsibilities: '',
-    salary: 0,
+    salary: '',
     location: '',
     employmentType: '',
     company: '',
+    status: 'active',
     skills: [],
-    education: ''
+    education: '',
+    createdAt: '',
+    updatedAt: ''
   });
 
   useEffect(() => {
@@ -184,10 +189,11 @@ const VacancyEdit: React.FC = () => {
               <TextField
                 fullWidth
                 label="Требования"
-                multiline
-                rows={4}
-                value={formData.requirements}
-                onChange={(e) => setFormData(prev => ({ ...prev, requirements: e.target.value }))}
+                value={formData.requirements?.join(', ') || ''}
+                onChange={e => setFormData(prev => ({
+                  ...prev,
+                  requirements: e.target.value.split(',').map(s => s.trim())
+                }))}
                 required
                 sx={{ mb: 2 }}
               />
@@ -208,7 +214,7 @@ const VacancyEdit: React.FC = () => {
                 label="Зарплата"
                 type="number"
                 value={formData.salary}
-                onChange={(e) => setFormData(prev => ({ ...prev, salary: parseInt(e.target.value) }))}
+                onChange={(e) => setFormData(prev => ({ ...prev, salary: e.target.value }))}
                 required
                 sx={{ mb: 2 }}
               />

@@ -21,6 +21,7 @@ type AuthUsecaseInterface interface {
 	GetUser(ctx context.Context, req *GetUserRequest) (*entity.User, error)
 	GetUserByID(ctx context.Context, id int64) (*entity.User, error)
 	GetTokenSecret() string
+	Update(ctx context.Context, user *entity.User) error
 }
 
 type authUsecase struct {
@@ -206,4 +207,8 @@ func (uc *authUsecase) generateToken(userID int64) (string, error) {
 	}
 
 	return tokenString, nil
+}
+
+func (uc *authUsecase) Update(ctx context.Context, user *entity.User) error {
+	return uc.userRepo.Update(ctx, user)
 }

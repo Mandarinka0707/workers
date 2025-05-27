@@ -18,14 +18,16 @@ type ResumeUsecaseInterface interface {
 }
 
 type ResumeUsecase struct {
-	resumeRepo repository.ResumeRepositoryInterface
-	userRepo   repository.UserRepositoryInterface
+	resumeRepo      repository.ResumeRepositoryInterface
+	userRepo        repository.UserRepositoryInterface
+	applicationRepo repository.ApplicationRepositoryInterface
 }
 
-func NewResumeUsecase(resumeRepo repository.ResumeRepositoryInterface, userRepo repository.UserRepositoryInterface) *ResumeUsecase {
+func NewResumeUsecase(resumeRepo repository.ResumeRepositoryInterface, userRepo repository.UserRepositoryInterface, applicationRepo repository.ApplicationRepositoryInterface) *ResumeUsecase {
 	return &ResumeUsecase{
-		resumeRepo: resumeRepo,
-		userRepo:   userRepo,
+		resumeRepo:      resumeRepo,
+		userRepo:        userRepo,
+		applicationRepo: applicationRepo,
 	}
 }
 
@@ -66,6 +68,12 @@ func (uc *ResumeUsecase) UpdateResume(ctx context.Context, resume *entity.Resume
 }
 
 func (uc *ResumeUsecase) DeleteResume(ctx context.Context, id int64) error {
+	// First, delete all related applications
+	if err := uc.applicationRepo.DeleteByResumeID(ctx, id); err != nil {
+		return fmt.Errorf("failed to delete related applications: %w", err)
+	}
+
+	// Then delete the resume
 	return uc.resumeRepo.Delete(ctx, id)
 }
 

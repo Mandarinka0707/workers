@@ -158,15 +158,70 @@ func (r *ResumeRepository) GetResumeByID(ctx context.Context, id int64) (*entity
 
 func (r *ResumeRepository) GetResumesByUserID(ctx context.Context, userID int64) ([]*entity.Resume, error) {
 	query := `
-		SELECT id, user_id, title, description, skills, experience, education, status, created_at, updated_at
+		SELECT 
+			id, 
+			user_id, 
+			title, 
+			description, 
+			COALESCE(skills::text, '[]') as skills, 
+			experience, 
+			education, 
+			status, 
+			created_at, 
+			updated_at
 		FROM resumes
 		WHERE user_id = $1
 		ORDER BY created_at DESC`
 
-	var resumes []*entity.Resume
-	err := r.db.SelectContext(ctx, &resumes, query, userID)
+	rows, err := r.db.QueryContext(ctx, query, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get resumes: %w", err)
+	}
+	defer rows.Close()
+
+	var resumes []*entity.Resume
+	for rows.Next() {
+		var resume entity.Resume
+		var skillsStr string
+		err := rows.Scan(
+			&resume.ID,
+			&resume.UserID,
+			&resume.Title,
+			&resume.Description,
+			&skillsStr,
+			&resume.Experience,
+			&resume.Education,
+			&resume.Status,
+			&resume.CreatedAt,
+			&resume.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan resume row: %w", err)
+		}
+
+		// Parse the skills string into a string array
+		if skillsStr == "[]" {
+			resume.Skills = []string{}
+		} else {
+			// Remove the square brackets and split by comma
+			skillsStr = strings.Trim(skillsStr, "[]{}")
+			if skillsStr != "" {
+				// Split by comma and trim quotes and spaces
+				skills := strings.Split(skillsStr, ",")
+				for i, skill := range skills {
+					skills[i] = strings.Trim(skill, `" `)
+				}
+				resume.Skills = skills
+			} else {
+				resume.Skills = []string{}
+			}
+		}
+
+		resumes = append(resumes, &resume)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating resume rows: %w", err)
 	}
 
 	return resumes, nil
