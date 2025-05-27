@@ -1,22 +1,29 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
+	"github.com/Mandarinka0707/newRepoGOODarhit/internal/config"
 	"github.com/Mandarinka0707/newRepoGOODarhit/internal/controller"
 	"github.com/Mandarinka0707/newRepoGOODarhit/internal/middleware"
 	"github.com/Mandarinka0707/newRepoGOODarhit/internal/repository"
 	"github.com/Mandarinka0707/newRepoGOODarhit/internal/usecase"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/jmoiron/sqlx"
+	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -50,6 +57,15 @@ var (
 )
 
 func main() {
+	if err := godotenv.Load(); err != nil {
+		log.Printf("No .env file found")
+	}
+
+	cfg, err := config.NewConfig()
+	if err != nil {
+		log.Fatalf("Config error: %s", err)
+	}
+
 	// Initialize logger
 	logger, err := zap.NewProduction()
 	if err != nil {
@@ -58,12 +74,7 @@ func main() {
 	defer logger.Sync()
 
 	// Database connection
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		dbURL = "postgres://postgres:postgres@localhost:5432/job_search_platform?sslmode=disable"
-	}
-
-	db, err := sqlx.Connect("postgres", dbURL)
+	db, err := sqlx.Connect("postgres", cfg.DBURL)
 	if err != nil {
 		logger.Fatal("Failed to connect to database", zap.Error(err))
 	}
@@ -72,9 +83,9 @@ func main() {
 	// Run migrations
 	migrationsPath := os.Getenv("MIGRATIONS_PATH")
 	if migrationsPath == "" {
-		migrationsPath = "../migrations"
+		migrationsPath = "migrations"
 	}
-	if err := runMigrations(dbURL, migrationsPath, logger); err != nil {
+	if err := runMigrations(cfg.DBURL, migrationsPath, logger); err != nil {
 		logger.Fatal("Failed to run migrations", zap.Error(err))
 	}
 
@@ -85,18 +96,13 @@ func main() {
 	applicationRepo := repository.NewApplicationRepository(db)
 
 	// Initialize use cases
-	tokenSecret := os.Getenv("JWT_SECRET")
-	if tokenSecret == "" {
-		tokenSecret = "your-secret-key"
-	}
-
 	authConfig := &usecase.Config{
-		TokenSecret:     tokenSecret,
-		TokenExpiration: 24 * time.Hour,
+		TokenSecret:     cfg.TokenSecret,
+		TokenExpiration: time.Duration(cfg.TokenExpiration) * time.Second,
 	}
 	userConfig := &usecase.UserConfig{
-		TokenSecret:     tokenSecret,
-		TokenExpiration: 24 * time.Hour,
+		TokenSecret:     cfg.TokenSecret,
+		TokenExpiration: time.Duration(cfg.TokenExpiration) * time.Second,
 	}
 	authUsecase := usecase.NewAuthUsecase(userRepo, authConfig, logger)
 	userUsecase := usecase.NewUserUsecase(userRepo, userConfig)
@@ -110,24 +116,20 @@ func main() {
 	vacancyController := controller.NewVacancyController(vacancyUsecase)
 	resumeController := controller.NewResumeController(resumeUsecase)
 	applicationController := controller.NewApplicationController(applicationUsecase)
+	adminController := controller.NewAdminController(userUsecase, vacancyUsecase, resumeUsecase)
 
 	// Initialize router
 	router := gin.Default()
 
 	// CORS middleware
-	router.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
-		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
-
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
-			return
-		}
-
-		c.Next()
-	})
+	router.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:4200", "http://localhost:3000"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
 
 	// API routes
 	api := router.Group("/api/v1")
@@ -141,7 +143,7 @@ func main() {
 
 		// User routes
 		users := api.Group("/users")
-		users.Use(middleware.AuthMiddleware(tokenSecret))
+		users.Use(middleware.AuthMiddleware(cfg.TokenSecret))
 		{
 			users.GET("/me", userController.GetMe)
 			users.PUT("/me", userController.UpdateMe)
@@ -149,7 +151,7 @@ func main() {
 
 		// Vacancy routes
 		vacancies := api.Group("/vacancies")
-		vacancies.Use(middleware.AuthMiddleware(tokenSecret))
+		vacancies.Use(middleware.AuthMiddleware(cfg.TokenSecret))
 		{
 			vacancies.POST("", vacancyController.Create)
 			vacancies.GET("", vacancyController.GetAll)
@@ -160,7 +162,7 @@ func main() {
 
 		// Resume routes
 		resumes := api.Group("/resumes")
-		resumes.Use(middleware.AuthMiddleware(tokenSecret))
+		resumes.Use(middleware.AuthMiddleware(cfg.TokenSecret))
 		{
 			resumes.POST("", resumeController.CreateResume)
 			resumes.GET("", resumeController.GetAllResumes)
@@ -172,12 +174,25 @@ func main() {
 
 		// Application routes
 		applications := api.Group("/applications")
-		applications.Use(middleware.AuthMiddleware(tokenSecret))
+		applications.Use(middleware.AuthMiddleware(cfg.TokenSecret))
 		{
 			applications.POST("", applicationController.Create)
 			applications.GET("", applicationController.GetAll)
 			applications.GET("/:id", applicationController.GetByID)
 			applications.PUT("/:id/status", applicationController.UpdateStatus)
+		}
+
+		// Admin routes
+		admin := api.Group("/admin")
+		admin.Use(middleware.AuthMiddleware(cfg.TokenSecret))
+		{
+			admin.GET("/users", adminController.GetAllUsers)
+			admin.DELETE("/users/:id", adminController.DeleteUser)
+			admin.DELETE("/vacancies/:id", adminController.DeleteVacancy)
+			admin.DELETE("/resumes/:id", adminController.DeleteResume)
+			admin.GET("/stats/users", adminController.GetStats)
+			admin.GET("/vacancies", adminController.GetAllVacancies)
+			admin.GET("/resumes", adminController.GetAllResumes)
 		}
 	}
 
@@ -185,15 +200,31 @@ func main() {
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// Start server
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
+	logger.Info("Starting server", zap.String("port", cfg.Port))
+	srv := &http.Server{
+		Addr:    ":" + cfg.Port,
+		Handler: router,
 	}
 
-	logger.Info("Starting server", zap.String("port", port))
-	if err := router.Run(":" + port); err != nil {
-		logger.Fatal("Failed to start server", zap.Error(err))
+	// Graceful shutdown
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Fatal("Failed to start server", zap.Error(err))
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	logger.Info("Shutting down server...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		logger.Fatal("Server forced to shutdown", zap.Error(err))
 	}
+
+	logger.Info("Server exiting")
 }
 
 func runMigrations(dbURL, migrationsPath string, logger *zap.Logger) error {

@@ -47,3 +47,25 @@ func AuthMiddleware(tokenSecret string) gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+func AdminAuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, exists := c.Get("user_id")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			c.Abort()
+			return
+		}
+
+		userRole, exists := c.Get("user_role")
+		if !exists || userRole != "admin" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			c.Abort()
+			return
+		}
+
+		// Store userID in context for later use
+		c.Set("admin_id", userID)
+		c.Next()
+	}
+}

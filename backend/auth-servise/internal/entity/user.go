@@ -14,7 +14,19 @@ type User struct {
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 }
 
+type UserRole string
+
 const (
-	RoleAdmin = "admin"
-	RoleUser  = "user"
+	RoleJobseeker UserRole = "jobseeker"
+	RoleEmployer  UserRole = "employer"
+	RoleAdmin     UserRole = "admin"
 )
+
+type UserStats struct {
+	TotalUsers        int `json:"total_users"`
+	TotalEmployers    int `json:"total_employers"`
+	TotalJobseekers   int `json:"total_jobseekers"`
+	TotalVacancies    int `json:"total_vacancies"`
+	TotalResumes      int `json:"total_resumes"`
+	TotalApplications int `json:"total_applications"`
+}

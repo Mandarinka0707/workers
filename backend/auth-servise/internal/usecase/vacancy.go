@@ -17,6 +17,7 @@ type VacancyUsecaseInterface interface {
 	Create(ctx context.Context, vacancy *entity.Vacancy) error
 	GetByID(ctx context.Context, id int64) (*entity.Vacancy, error)
 	GetAll(ctx context.Context) ([]*entity.Vacancy, error)
+	GetByEmployerID(ctx context.Context, employerID int64) ([]*entity.Vacancy, error)
 	Update(ctx context.Context, vacancy *entity.Vacancy) error
 	Delete(ctx context.Context, id int64, employerID int64) error
 }
@@ -67,14 +68,18 @@ func (uc *VacancyUsecase) GetByID(ctx context.Context, id int64) (*entity.Vacanc
 }
 
 func (uc *VacancyUsecase) GetAll(ctx context.Context) ([]*entity.Vacancy, error) {
-	fmt.Printf("Starting to fetch all vacancies in usecase\n")
+	fmt.Printf("VacancyUsecase.GetAll: Starting to fetch all vacancies\n")
 	vacancies, err := uc.vacancyRepo.GetAll(ctx)
 	if err != nil {
-		fmt.Printf("Error in GetAll usecase: %v\n", err)
+		fmt.Printf("VacancyUsecase.GetAll: Error fetching vacancies: %v\n", err)
 		return nil, fmt.Errorf("failed to get vacancies: %w", err)
 	}
-	fmt.Printf("Successfully fetched %d vacancies in usecase\n", len(vacancies))
+	fmt.Printf("VacancyUsecase.GetAll: Successfully fetched %d vacancies\n", len(vacancies))
 	return vacancies, nil
+}
+
+func (uc *VacancyUsecase) GetByEmployerID(ctx context.Context, employerID int64) ([]*entity.Vacancy, error) {
+	return uc.vacancyRepo.GetByEmployerID(ctx, employerID)
 }
 
 func (uc *VacancyUsecase) Update(ctx context.Context, vacancy *entity.Vacancy) error {

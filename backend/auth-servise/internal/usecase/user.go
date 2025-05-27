@@ -22,10 +22,13 @@ type UserUsecaseInterface interface {
 	Logout(ctx context.Context, token string) error
 	GetByID(ctx context.Context, id int64) (*entity.User, error)
 	Update(ctx context.Context, user *entity.User) error
+	Delete(ctx context.Context, id int64) error
+	GetAll(ctx context.Context) ([]*entity.User, error)
+	GetStats(ctx context.Context) (*entity.UserStats, error)
 }
 
 type UserUsecase struct {
-	userRepo repository.UserRepository
+	userRepo repository.UserRepositoryInterface
 	config   *UserConfig
 }
 
@@ -34,7 +37,7 @@ type UserConfig struct {
 	TokenExpiration time.Duration
 }
 
-func NewUserUsecase(userRepo repository.UserRepository, config *UserConfig) *UserUsecase {
+func NewUserUsecase(userRepo repository.UserRepositoryInterface, config *UserConfig) *UserUsecase {
 	return &UserUsecase{
 		userRepo: userRepo,
 		config:   config,
@@ -107,4 +110,36 @@ func (uc *UserUsecase) Update(ctx context.Context, user *entity.User) error {
 	// Set updated timestamp
 	user.UpdatedAt = time.Now()
 	return uc.userRepo.Update(ctx, user)
+}
+
+func (u *UserUsecase) Delete(ctx context.Context, id int64) error {
+	return u.userRepo.Delete(ctx, id)
+}
+
+func (u *UserUsecase) GetAll(ctx context.Context) ([]*entity.User, error) {
+	return u.userRepo.GetAll(ctx)
+}
+
+func (u *UserUsecase) GetStats(ctx context.Context) (*entity.UserStats, error) {
+	users, err := u.userRepo.GetAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	stats := &entity.UserStats{
+		TotalUsers:      len(users),
+		TotalEmployers:  0,
+		TotalJobseekers: 0,
+	}
+
+	for _, user := range users {
+		switch user.Role {
+		case "employer":
+			stats.TotalEmployers++
+		case "jobseeker":
+			stats.TotalJobseekers++
+		}
+	}
+
+	return stats, nil
 }

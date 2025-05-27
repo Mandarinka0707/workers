@@ -15,6 +15,8 @@ type ResumeUsecaseInterface interface {
 	UpdateResume(ctx context.Context, resume *entity.Resume) error
 	DeleteResume(ctx context.Context, id int64) error
 	GetAllResumes(ctx context.Context) ([]*entity.Resume, error)
+	Delete(ctx context.Context, id int64) error
+	GetAll(ctx context.Context) ([]*entity.Resume, error)
 }
 
 type ResumeUsecase struct {
@@ -79,4 +81,12 @@ func (uc *ResumeUsecase) DeleteResume(ctx context.Context, id int64) error {
 
 func (uc *ResumeUsecase) GetAllResumes(ctx context.Context) ([]*entity.Resume, error) {
 	return uc.resumeRepo.GetAll()
+}
+
+func (u *ResumeUsecase) Delete(ctx context.Context, id int64) error {
+	return u.resumeRepo.Delete(ctx, id)
+}
+
+func (uc *ResumeUsecase) GetAll(ctx context.Context) ([]*entity.Resume, error) {
+	return uc.GetAllResumes(ctx)
 }

@@ -25,12 +25,12 @@ type AuthUsecaseInterface interface {
 }
 
 type authUsecase struct {
-	userRepo repository.UserRepository
+	userRepo repository.UserRepositoryInterface
 	config   *Config
 	logger   *zap.Logger
 }
 
-func NewAuthUsecase(userRepo repository.UserRepository, config *Config, logger *zap.Logger) AuthUsecaseInterface {
+func NewAuthUsecase(userRepo repository.UserRepositoryInterface, config *Config, logger *zap.Logger) AuthUsecaseInterface {
 	return &authUsecase{
 		userRepo: userRepo,
 		config:   config,
